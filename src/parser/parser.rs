@@ -247,16 +247,15 @@ impl Parser {
             Some(Token::ADD) | Some(Token::MINUS) | Some(Token::SLASH) | Some(Token::ASTERISK) | 
             Some(Token::EQ) | Some(Token::NOT_EQ) | Some(Token::LT) | Some(Token::LT_EQ) | 
             Some(Token::GT) | Some(Token::GT_EQ) => self.parse_infix_expression(left),
-            Some(Token::LPAREN) => self.parse_call_expression(),
+            Some(Token::LPAREN) => self.parse_call_expression(left),
             _ => None
         }
     }
 
-    fn parse_call_expression(&mut self) -> Option<Expression> {
-        let cur_token = self.cur_token.take().unwrap();
+    fn parse_call_expression(&mut self, left: Expression) -> Option<Expression> {
         self.next_token();
         if let Some(args) = self.parse_call_arguments() {
-            return Some(Expression::Call(cur_token, args))
+            return Some(Expression::Call(Box::new(left), args))
         }
 
         None
@@ -649,11 +648,30 @@ mod test {
 
         let expected = vec![
             Statement::Expr(Expression::Call(
-                Token::IDENT("add".to_string()),
+                Box::new(Expression::Ident("add".to_string())),
                 vec![
                     Expression::Int(1),
                     Expression::Infix(Box::new(Expression::Int(2)), Token::ASTERISK, Box::new(Expression::Int(3))),
                     Expression::Infix(Box::new(Expression::Int(4)), Token::ADD, Box::new(Expression::Int(5)))
+                ]
+            ))
+        ];
+
+    }
+
+    #[test]
+    fn test_call_expression2() {
+        let input = "fn(x) { x; }(5)".to_string();
+        let program = parse_program(input);
+
+        let expected = vec![
+            Statement::Expr(Expression::Call(
+                Box::new(Expression::Function(
+                    vec![Token::IDENT("x".to_string())],
+                    Box::new(Statement::Expr(Expression::Ident("x".to_string())))
+                )),
+                vec![
+                    Expression::Int(5),
                 ]
             ))
         ];

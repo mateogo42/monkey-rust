@@ -1,7 +1,7 @@
 use std::io;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use crate::eval::eval_statement;
+use crate::eval::{eval_statements, Environment};
 
 const MONKEY: &str = "
            __,__
@@ -22,6 +22,7 @@ pub fn start() {
     println!("{}", MONKEY);
     println!("Hello! This is the Monkey programming language");
     println!("Feel free to type in commands");
+    let mut environment = Environment::new();
     loop {
         print!("{}", PROMPT);
         let mut buf = String::new();
@@ -34,12 +35,10 @@ pub fn start() {
 
         let program = parser.parse_program();
 
-        for stmt in program.statements {
-            match eval_statement(stmt) {
-                Some(res) => println!("{}", res.inspect()),
-                None => println!("undefined")
-            };
-        }
+        match eval_statements(program.statements, &mut environment) {
+            Some(res) => println!("{}", res.inspect()),
+            None => println!("undefined")
+        };
 
     }
 }

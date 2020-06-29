@@ -1,6 +1,6 @@
 use crate::lexer::Token;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let(Identifier, Expression),
     Return(Expression),
@@ -8,7 +8,7 @@ pub enum Statement {
     Block(Vec<Statement>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Int(i32),
     Ident(String),
@@ -17,7 +17,7 @@ pub enum Expression {
     Infix(Box<Expression>, Token, Box<Expression>),
     If(Box<Expression>, Box<Statement>, Option<Box<Statement>>),
     Function(Vec<Identifier>, Box<Statement>),
-    Call(Token, Vec<Expression>),
+    Call(Box<Expression>, Vec<Expression>),
     Null
 
 }

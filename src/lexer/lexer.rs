@@ -207,7 +207,6 @@ mod tests {
 
         for token in expected_results {
             let result = lexer.next_token().unwrap();
-            println!("{:?}", result);
             assert_eq!(result, token);
         }
     }
