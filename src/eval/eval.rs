@@ -36,6 +36,7 @@ pub fn eval_expression(expr: Expression, environment: &mut Environment) -> Optio
     match expr {
         Expression::Int(value) => Some(Object::Int(value)),
         Expression::Bool(value) => Some(Object::Bool(value)),
+        Expression::Str(value) => Some(Object::Str(value)),
         Expression::Prefix(operator, value) => {
             let right = eval_expression(*value, environment).unwrap();
             eval_prefix_expression(operator, right)
@@ -56,9 +57,7 @@ pub fn eval_expression(expr: Expression, environment: &mut Environment) -> Optio
             Some(Object::Null)
         },
         Expression::Ident(ident) => environment.get(ident),
-        Expression::Function(parameters, body) => {
-            Some(Object::Function(parameters, body, Box::new(environment.clone())))
-        },
+        Expression::Function(parameters, body) => Some(Object::Function(parameters, body, Box::new(environment.clone()))),
         Expression::Call(ident, parameters) => {
             let body = eval_expression(*ident, environment).unwrap();
             let args: Vec<Object> = parameters.into_iter().map(|param| eval_expression(param, environment).unwrap()).collect();
@@ -70,12 +69,14 @@ pub fn eval_expression(expr: Expression, environment: &mut Environment) -> Optio
 }
 
 fn apply_function(function: Object, args: Vec<Object>) -> Option<Object> {
-    if let Object::Function(parameters, body, env) = function {
-        let mut extended_env = extend_environment(parameters, args, *env);
-        return eval_single_statement(*body, &mut extended_env)
+    match function {
+        Object::Function(parameters, body, env) => {
+            let mut extended_env = extend_environment(parameters, args, *env);
+            eval_single_statement(*body, &mut extended_env)
+        },
+        Object::Builtin(func) => func(args),
+        _ => None
     }
-
-    None
 }
 
 fn extend_environment(parameters: Vec<Token>, args: Vec<Object>, outer: Environment) -> Environment {
@@ -103,6 +104,19 @@ pub fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Op
     match (left, right) {
         (Object::Int(left_value), Object::Int(right_value)) => eval_integer_infix_expression(operator, left_value, right_value),
         (Object::Bool(left_value), Object::Bool(right_value)) => eval_boolean_infix_expression(operator, left_value, right_value),
+        (Object::Str(left_value), Object::Str(right_value)) => eval_string_infix_expression(operator, left_value, right_value),
+        _ => None
+    }
+}
+
+fn eval_string_infix_expression(operator: Token, left: String, right: String) -> Option<Object> {
+    match operator {
+        Token::ADD => {
+            let mut owned_left = left.to_owned();
+            let owned_right = right.to_owned();
+            owned_left.push_str(&owned_right);
+            return Some(Object::Str(owned_left))
+        },
         _ => None
     }
 }
@@ -352,6 +366,45 @@ mod test {
             ("let add = fn(x, y) { x + y; }; add(5, 5);".to_string(), Object::Int(10)),
             ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));".to_string(), Object::Int(20)),
             ("fn(x) { x; }(5)".to_string(), Object::Int(5))
+        ];
+
+        for test in test_cases {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            let mut environment = Environment::new();
+            assert_eq!(eval_statements(program.statements, &mut environment).unwrap(), test.1);
+        }
+    }
+    
+    #[test]
+    fn test_string_literal() {
+        let input = "\"Hello World\"".to_string();
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        let mut environment = Environment::new();
+        let evaluated = eval_statements(program.statements, &mut environment).unwrap();
+        assert_eq!(evaluated, Object::Str("Hello World".to_string()));
+    }
+
+    #[test]
+    fn test_string_concatenation() {
+        let input = "\"Hello\" + \" \" + \"World!\"".to_string();
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        let mut environment = Environment::new();
+        let evaluated = eval_statements(program.statements, &mut environment).unwrap();
+        assert_eq!(evaluated, Object::Str("Hello World!".to_string()))
+    }
+
+    #[test]
+    fn test_builtin_functions() {
+        let test_cases = vec![
+            ("len(\"\")".to_string(), Object::Int(0)),
+            ("len(\"four\")".to_string(), Object::Int(4)),
+            ("len(\"hello world\")".to_string(), Object::Int(11)),
         ];
 
         for test in test_cases {

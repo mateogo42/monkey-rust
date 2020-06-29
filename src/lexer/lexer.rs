@@ -98,6 +98,16 @@ impl Lexer {
             '!' => self.check_eq(Token::NOT_EQ, Token::BANG),
             '<' => self.check_eq(Token::LT_EQ, Token::LT),
             '>' => self.check_eq(Token::GT_EQ, Token::GT),
+            '"' => {
+                let position = self.position + 1;
+                loop {
+                    self.read_char();
+                    if self.ch == '"' || self.ch == '\0' {
+                        break
+                    }
+                }
+                Some(Token::STRING(self.input[position..self.position].to_string()))
+            },
             _ => {
                 if self.ch.is_alphabetic() || self.ch == '_' {
                     return  Some(self.read_identifier())
@@ -136,6 +146,9 @@ mod tests {
             
             10 == 10;
             10 != 9;
+
+            \"foobar\";
+            \"foo bar\";
 
             ");
 
@@ -200,6 +213,10 @@ mod tests {
             Token::INT(10),
             Token::NOT_EQ,
             Token::INT(9),
+            Token::SEMICOLON,
+            Token::STRING("foobar".to_string()),
+            Token::SEMICOLON,
+            Token::STRING("foo bar".to_string()),
             Token::SEMICOLON,            
         ];
 

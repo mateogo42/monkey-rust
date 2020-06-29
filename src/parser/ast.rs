@@ -11,6 +11,7 @@ pub enum Statement {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Int(i32),
+    Str(String),
     Ident(String),
     Bool(bool),
     Prefix(Token, Box<Expression>),

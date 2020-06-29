@@ -142,6 +142,7 @@ impl Parser {
             Some(Token::LPAREN) => self.parse_grouped_expression(),
             Some(Token::IF) => self.parse_if_expression(),
             Some(Token::FUNCTION) => self.parse_function_expression(),
+            Some(Token::STRING(string)) => Some(Expression::Str(string.to_string())),
             _ => None
 
         }
@@ -657,6 +658,10 @@ mod test {
             ))
         ];
 
+        for i in 0..program.statements.len() {
+            assert_eq!(program.statements[i], expected[i]);
+        }
+
     }
 
     #[test]
@@ -668,13 +673,29 @@ mod test {
             Statement::Expr(Expression::Call(
                 Box::new(Expression::Function(
                     vec![Token::IDENT("x".to_string())],
-                    Box::new(Statement::Expr(Expression::Ident("x".to_string())))
+                    Box::new(Statement::Block(vec![Statement::Expr(Expression::Ident("x".to_string())),]))
                 )),
                 vec![
                     Expression::Int(5),
                 ]
             ))
         ];
+
+        for i in 0..program.statements.len() {
+            assert_eq!(program.statements[i], expected[i]);
+        }
+
+    }
+
+    #[test]
+    fn test_string_literal_expression() {
+        let input = "\"Hello World\"".to_string();
+
+        let program = parse_program(input);
+
+        let expected = Statement::Expr(Expression::Str("Hello World".to_string()));
+
+        assert_eq!(program.statements[0], expected);
 
     }
 
