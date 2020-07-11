@@ -49,7 +49,7 @@ impl Lexer {
 
     pub fn read_identifier(&mut self) -> Token {
         let position = self.position;
-        while self.ch.is_alphabetic() || self.ch == '_' {
+        while self.ch.is_alphanumeric() || self.ch == '_' {
             self.read_char();
         }
         

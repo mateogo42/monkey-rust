@@ -24,21 +24,17 @@ pub enum Expression {
 }
 
 pub struct Program {
-    pub statements: Vec<Statement>
+    pub statements: Vec<Statement>,
+    pub errors: Vec<String>
 }
 
 impl Program {
     pub fn new() -> Self {
         Program {
-            statements: Vec::new()
+            statements: Vec::new(),
+            errors: Vec::new()
         }
     }
-}
-
-pub struct LetStatement {
-    token: Token,
-    name: Identifier,
-    value: Expression
 }
 
 pub type Identifier = Token;

@@ -14,7 +14,7 @@ pub enum Object {
     Bool(bool),
     Str(String),
     Return(Box<Object>),
-    Function(Vec<Identifier>, Box<Statement>, Box<Environment>),
+    Function(Vec<Identifier>, Box<Statement>),
     Builtin(BuiltinFunc),
     Null,
 }

@@ -34,11 +34,16 @@ pub fn start() {
         let mut parser = Parser::new(lexer);
 
         let program = parser.parse_program();
-
-        match eval_statements(program.statements, &mut environment) {
-            Some(res) => println!("{}", res.inspect()),
-            None => println!("undefined")
-        };
+        if program.errors.len() != 0 {
+            for error in program.errors {
+                println!("{}", error);
+            }
+        } else {
+            match eval_statements(program.statements, &mut environment) {
+                Ok(res) => println!("{}", res.inspect()),
+                Err(err) => println!("{}", err)
+            };
+        }
 
     }
 }

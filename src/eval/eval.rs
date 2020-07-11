@@ -2,80 +2,81 @@ use crate::eval::{Object, Environment};
 use crate::parser::{ Statement, Program, Parser, Expression };
 use crate::lexer::{Lexer, Token};
 
+type EvalResult<T> = Result<T, String>;
 
-pub fn eval_statements(statements: Vec<Statement>, environment: &mut Environment) -> Option<Object> {
-    let mut result = None;
+pub fn eval_statements(statements: Vec<Statement>, environment: &mut Environment) -> EvalResult<Object> {
+    let mut result = Object::Null;
     for stmt in statements {
         if let Statement::Return(expr) = stmt {
             return eval_expression(expr, environment) 
         }
-        result = eval_single_statement(stmt, environment);
+        result = eval_single_statement(stmt, environment)?;
     }
 
-    result
+    Ok(result)
 }
 
-pub fn eval_single_statement(stmt: Statement, environment: &mut Environment) -> Option<Object> {
+pub fn eval_single_statement(stmt: Statement, environment: &mut Environment) -> EvalResult<Object> {
     match stmt {
         Statement::Expr(expression) => eval_expression(expression, environment),
         Statement::Block(statements) => eval_statements(statements, environment),
         Statement::Return(expression) => eval_expression(expression, environment),
         Statement::Let(Token::IDENT(ident), expression) => eval_let_statement(ident, expression, environment),
-        _ => None
+        _ => Err("ERROR: Invalid syntax".to_string())
     }
 }
 
 
-pub fn eval_let_statement(ident: String, expression: Expression, environment: &mut Environment) -> Option<Object> {
-    let value = eval_expression(expression, environment).unwrap();
+pub fn eval_let_statement(ident: String, expression: Expression, environment: &mut Environment) -> EvalResult<Object> {
+    let value = eval_expression(expression, environment)?;
     environment.set(ident, value);
-    Some(Object::Null)
+    Ok(Object::Null)
 }
 
-pub fn eval_expression(expr: Expression, environment: &mut Environment) -> Option<Object> {
+pub fn eval_expression(expr: Expression, environment: &mut Environment) -> EvalResult<Object> {
     match expr {
-        Expression::Int(value) => Some(Object::Int(value)),
-        Expression::Bool(value) => Some(Object::Bool(value)),
-        Expression::Str(value) => Some(Object::Str(value)),
+        Expression::Int(value) => Ok(Object::Int(value)),
+        Expression::Bool(value) => Ok(Object::Bool(value)),
+        Expression::Str(value) => Ok(Object::Str(value)),
         Expression::Prefix(operator, value) => {
-            let right = eval_expression(*value, environment).unwrap();
+            let right = eval_expression(*value, environment)?;
             eval_prefix_expression(operator, right)
         },
         Expression::Infix(left_expr, operator, right_expr) => {
-            let left = eval_expression(*left_expr, environment).unwrap();
-            let right = eval_expression(*right_expr, environment).unwrap();
+            let left = eval_expression(*left_expr, environment)?;
+            let right = eval_expression(*right_expr, environment)?;
             
             eval_infix_expression(operator, left, right)
         },
         Expression::If(cond, cons, alt) => {
-            let condition = eval_expression(*cond, environment).unwrap();
+            let condition = eval_expression(*cond, environment)?;
             if is_truthy(condition) {
                 return eval_single_statement(*cons, environment)
             } else if alt != None {
                 return eval_single_statement(*alt.unwrap(), environment);
             }
-            Some(Object::Null)
+            Ok(Object::Null)
         },
-        Expression::Ident(ident) => environment.get(ident),
-        Expression::Function(parameters, body) => Some(Object::Function(parameters, body, Box::new(environment.clone()))),
+        Expression::Ident(ident) => environment.get(ident.clone()).ok_or_else(|| format!("ERROR: {} is not defined", ident)),
+        Expression::Function(parameters, body) => Ok(Object::Function(parameters, body)),
         Expression::Call(ident, parameters) => {
-            let body = eval_expression(*ident, environment).unwrap();
+            let body = eval_expression(*ident, environment)?;
             let args: Vec<Object> = parameters.into_iter().map(|param| eval_expression(param, environment).unwrap()).collect();
             
-            apply_function(body, args)
+            apply_function(body, args, environment.clone())
         }
-        _ => None
+        _ => Err("ERROR: Invalid Expression".to_string())
     }
 }
 
-fn apply_function(function: Object, args: Vec<Object>) -> Option<Object> {
+fn apply_function(function: Object, args: Vec<Object>, env: Environment) -> EvalResult<Object> {
     match function {
-        Object::Function(parameters, body, env) => {
-            let mut extended_env = extend_environment(parameters, args, *env);
+        Object::Function(parameters, body) => {
+            let mut extended_env = extend_environment(parameters, args, env);
             eval_single_statement(*body, &mut extended_env)
         },
         Object::Builtin(func) => func(args),
-        _ => None
+        _ => Err(format!("ERROR: Identifier {:?} not defined", function))
     }
 }
 
@@ -100,70 +101,71 @@ fn is_truthy(condition: Object) -> bool {
     }
 }
 
-pub fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Option<Object> {
+pub fn eval_infix_expression(operator: Token, left: Object, right: Object) -> EvalResult<Object> {
     match (left, right) {
         (Object::Int(left_value), Object::Int(right_value)) => eval_integer_infix_expression(operator, left_value, right_value),
         (Object::Bool(left_value), Object::Bool(right_value)) => eval_boolean_infix_expression(operator, left_value, right_value),
         (Object::Str(left_value), Object::Str(right_value)) => eval_string_infix_expression(operator, left_value, right_value),
-        _ => None
+        _ => Err("ERROR: Invalid operation".to_string())
     }
 }
 
-fn eval_string_infix_expression(operator: Token, left: String, right: String) -> Option<Object> {
+fn eval_string_infix_expression(operator: Token, left: String, right: String) -> EvalResult<Object> {
     match operator {
         Token::ADD => {
             let mut owned_left = left.to_owned();
             let owned_right = right.to_owned();
             owned_left.push_str(&owned_right);
-            return Some(Object::Str(owned_left))
+            return Ok(Object::Str(owned_left))
         },
-        _ => None
+        _ => Err("ERROR: Invalid operation for type string".to_string())
     }
 }
 
-fn eval_boolean_infix_expression(operator: Token, left: bool, right: bool) -> Option<Object> {
+fn eval_boolean_infix_expression(operator: Token, left: bool, right: bool) -> EvalResult<Object> {
+    
     match operator {
-        Token::EQ => Some(Object::Bool(left == right)),
-        Token::NOT_EQ => Some(Object::Bool(left != right)),
-        _ => None
+        Token::EQ => Ok(Object::Bool(left == right)),
+        Token::NOT_EQ => Ok(Object::Bool(left != right)),
+        _ => Err("ERROR: Invalid operation for type bool".to_string())
     }
 }
 
-fn eval_integer_infix_expression(operator: Token, left: i32, right: i32) -> Option<Object> {
+fn eval_integer_infix_expression(operator: Token, left: i32, right: i32) -> EvalResult<Object> {
     match operator {
-        Token::ADD => Some(Object::Int(left + right)),
-        Token::MINUS => Some(Object::Int(left - right)),
-        Token::ASTERISK => Some(Object::Int(left * right)),
-        Token::SLASH => Some(Object::Int(left / right)),
-        Token::LT => Some(Object::Bool(left < right)),
-        Token::LT_EQ => Some(Object::Bool(left <= right)),
-        Token::GT => Some(Object::Bool(left > right)),
-        Token::GT_EQ => Some(Object::Bool(left >= right)),
-        Token::EQ => Some(Object::Bool(left == right)),
-        Token::NOT_EQ => Some(Object::Bool(left != right)),
-        _ => None
+        Token::ADD => Ok(Object::Int(left + right)),
+        Token::MINUS => Ok(Object::Int(left - right)),
+        Token::ASTERISK => Ok(Object::Int(left * right)),
+        Token::SLASH => Ok(Object::Int(left / right)),
+        Token::LT => Ok(Object::Bool(left < right)),
+        Token::LT_EQ => Ok(Object::Bool(left <= right)),
+        Token::GT => Ok(Object::Bool(left > right)),
+        Token::GT_EQ => Ok(Object::Bool(left >= right)),
+        Token::EQ => Ok(Object::Bool(left == right)),
+        Token::NOT_EQ => Ok(Object::Bool(left != right)),
+        _ => Err("ERROR: invalid operation for type int".to_string())
     }
 }
 
-pub fn eval_prefix_expression(operator: Token, right: Object) -> Option<Object> {
+pub fn eval_prefix_expression(operator: Token, right: Object) -> EvalResult<Object> {
     match operator {
         Token::BANG => eval_bang_operator_expression(right),
         Token::MINUS => eval_minus_prefix_operator_expression(right),
-        _ => None
+        _ => Err("ERROR: ".to_string())
     }
 }
 
-pub fn eval_bang_operator_expression(right: Object) -> Option<Object> {
+pub fn eval_bang_operator_expression(right: Object) -> EvalResult<Object> {
     match right {
-        Object::Bool(false) => Some(Object::Bool(true)),
-        _ => Some(Object::Bool(false)),
+        Object::Bool(false) => Ok(Object::Bool(true)),
+        _ => Ok(Object::Bool(false)),
     }
 }
 
-pub fn eval_minus_prefix_operator_expression(right: Object) -> Option<Object> {
+pub fn eval_minus_prefix_operator_expression(right: Object) -> EvalResult<Object> {
     match right {
-        Object::Int(value) => Some(Object::Int(-value)),
-        _ => None
+        Object::Int(value) => Ok(Object::Int(-value)),
+        _ => Err("ERROR: ".to_string())
     }
 }
 
